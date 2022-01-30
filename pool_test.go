@@ -34,10 +34,10 @@ func TestWithErrors(t *testing.T) {
 		return err1
 	}
 
-	pool := New(2)
-	err := pool.Run(jobOK, jobOK, jobWithError, jobWithError)
+	pool := New(1)
+	err := pool.Run(jobOK, jobOK, jobWithError, jobWithError, jobOK)
 	require.Equal(t, 2, jobsDone)
-	require.Equal(t, 2, jobsWithErrors)
+	require.Equal(t, 1, jobsWithErrors)
 	require.Equal(t, err1, err)
 }
 
