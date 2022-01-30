@@ -47,7 +47,7 @@ func (p *pool) Run(jobs ...Job) error {
 
 	for i := 0; i < p.size; i++ {
 		p.wg.Add(1)
-		go p.worker(i)
+		go p.worker()
 	}
 	p.wg.Wait()
 
@@ -55,7 +55,7 @@ func (p *pool) Run(jobs ...Job) error {
 	return p.err
 }
 
-func (p *pool) worker(id int) {
+func (p *pool) worker() {
 	defer p.wg.Done()
 	for {
 		select {
