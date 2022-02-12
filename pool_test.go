@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -15,7 +16,7 @@ func TestSuccessful(t *testing.T) {
 	}
 
 	pool := New(2)
-	err := pool.Run(job, job, job, job)
+	err := pool.Run(context.Background(), job, job, job, job)
 	require.Nil(t, err)
 	require.Equal(t, jobsDone, 4)
 }
@@ -35,7 +36,7 @@ func TestWithErrors(t *testing.T) {
 	}
 
 	pool := New(1)
-	err := pool.Run(jobOK, jobOK, jobWithError, jobWithError, jobOK)
+	err := pool.Run(context.Background(), jobOK, jobOK, jobWithError, jobWithError, jobOK)
 	require.Equal(t, 2, jobsDone)
 	require.Equal(t, 1, jobsWithErrors)
 	require.Equal(t, err1, err)
@@ -44,7 +45,7 @@ func TestWithErrors(t *testing.T) {
 func TestMoreWorkersThanJobs(t *testing.T) {
 	jobsDone := 0
 	pool := New(100)
-	err := pool.Run(func() error {
+	err := pool.Run(context.Background(), func() error {
 		jobsDone++
 		return nil
 	})

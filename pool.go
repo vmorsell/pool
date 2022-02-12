@@ -8,60 +8,48 @@ import (
 type Job func() error
 
 type pool struct {
-	ctx    context.Context
-	cancel func()
-
 	size    int
 	wg      sync.WaitGroup
-	queue   chan Job
 	errOnce sync.Once
 	err     error
 }
 
 // New returns a new pool.
 func New(size int) *pool {
-	_, pool := NewWithContext(context.Background(), size)
-	return pool
-}
-
-// NewWithContext returns a new context-aware pool.
-func NewWithContext(ctx context.Context, size int) (context.Context, *pool) {
-	ctx, cancel := context.WithCancel(ctx)
-	return ctx, &pool{
-		ctx:    ctx,
-		cancel: cancel,
-		size:   size,
-		queue:  make(chan Job),
+	return &pool{
+		size: size,
 	}
 }
 
 // Run spawns the numbers of workers defined in the
 // pool and starts to execute the provided jobs.
-func (p *pool) Run(jobs ...Job) error {
-	go func() {
-		for _, j := range jobs {
-			p.queue <- j
-		}
-		close(p.queue)
-	}()
+func (p *pool) Run(ctx context.Context, jobs ...Job) error {
+	ctx, cancel := context.WithCancel(ctx)
+
+	queue := make(chan Job, len(jobs))
+	for _, j := range jobs {
+		queue <- j
+	}
+	close(queue)
 
 	for i := 0; i < p.size; i++ {
 		p.wg.Add(1)
-		go p.worker()
+		go p.worker(ctx, cancel, i, queue)
 	}
 	p.wg.Wait()
+	cancel()
 
 	// Return first seen error if any.
 	return p.err
 }
 
-func (p *pool) worker() {
+func (p *pool) worker(ctx context.Context, cancel func(), id int, queue <-chan Job) {
 	defer p.wg.Done()
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			return
-		case job, open := <-p.queue:
+		case job, open := <-queue:
 			if !open {
 				return
 			}
@@ -69,8 +57,9 @@ func (p *pool) worker() {
 			if err != nil {
 				p.errOnce.Do(func() {
 					p.err = err
-					p.cancel()
+					cancel()
 				})
+				return
 			}
 		}
 	}
