@@ -48,8 +48,7 @@ func Test(t *testing.T) {
 		err := p.Run(jobs...)
 
 		// The number of jobs processed differs depending on how many of the
-		// error jobs the workers start processing before the first error
-		// is returned.
+		// jobs the workers manage to start before the error is returned.
 		require.GreaterOrEqual(t, processed, len(okJobs)+1)
 		require.Equal(t, processed-1, ok)
 		require.Equal(t, err, wantErr)
