@@ -1,54 +1,57 @@
 package pool
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestSuccessful(t *testing.T) {
-	jobsDone := 0
-	job := func() error {
-		jobsDone++
-		return nil
-	}
+func Test(t *testing.T) {
+	t.Run("no errors", func(t *testing.T) {
+		ok := 0
+		fn := func() error {
+			ok++
+			return nil
+		}
 
-	pool := New(2)
-	err := pool.Run(context.Background(), job, job, job, job)
-	require.Nil(t, err)
-	require.Equal(t, jobsDone, 4)
-}
+		jobs := []Job{fn, fn, fn, fn, fn, fn}
+		p := New(3)
+		err := p.Run(jobs...)
 
-func TestWithErrors(t *testing.T) {
-	err1 := fmt.Errorf("err1")
-
-	jobsDone := 0
-	jobsWithErrors := 0
-	jobOK := func() error {
-		jobsDone++
-		return nil
-	}
-	jobWithError := func() error {
-		jobsWithErrors++
-		return err1
-	}
-
-	pool := New(1)
-	err := pool.Run(context.Background(), jobOK, jobOK, jobWithError, jobWithError, jobOK)
-	require.Equal(t, 2, jobsDone)
-	require.Equal(t, 1, jobsWithErrors)
-	require.Equal(t, err1, err)
-}
-
-func TestMoreWorkersThanJobs(t *testing.T) {
-	jobsDone := 0
-	pool := New(100)
-	err := pool.Run(context.Background(), func() error {
-		jobsDone++
-		return nil
+		require.Nil(t, err)
+		require.Equal(t, len(jobs), ok)
 	})
-	require.Equal(t, 1, jobsDone)
-	require.Nil(t, err)
+
+	t.Run("with errors", func(t *testing.T) {
+		processed := 0
+		ok := 0
+		wantErr := fmt.Errorf("err")
+
+		fn := func() error {
+			processed++
+			ok++
+			return nil
+		}
+
+		fnErr := func() error {
+			processed++
+			return wantErr
+		}
+
+		okJobs := []Job{fn, fn, fn, fn, fn}
+		jobs := append(okJobs, fnErr)
+		jobs = append(jobs, okJobs...)
+
+		size := 2
+		p := New(size)
+		err := p.Run(jobs...)
+
+		// The number of jobs processed differs depending on how many of the
+		// error jobs the workers start processing before the first error
+		// is returned.
+		require.GreaterOrEqual(t, processed, len(okJobs)+1)
+		require.Equal(t, processed-1, ok)
+		require.Equal(t, err, wantErr)
+	})
 }

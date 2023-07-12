@@ -1,66 +1,48 @@
 package pool
 
 import (
-	"context"
-	"sync"
+	"golang.org/x/sync/errgroup"
 )
 
 type Job func() error
 
 type pool struct {
-	size    int
-	wg      sync.WaitGroup
-	errOnce sync.Once
-	err     error
+	size  int
+	queue chan Job
 }
 
 // New returns a new pool.
 func New(size int) *pool {
 	return &pool{
-		size: size,
+		size:  size,
+		queue: make(chan Job),
 	}
 }
 
-// Run spawns the numbers of workers defined in the
-// pool and starts to execute the provided jobs.
-func (p *pool) Run(ctx context.Context, jobs ...Job) error {
-	ctx, cancel := context.WithCancel(ctx)
+// Queue runs the provided jobs and returns the first non-nil error if any.
+// No more jobs are consumed from the queue if an error occurs.
+func (p *pool) Run(jobs ...Job) error {
+	go func() {
+		for _, j := range jobs {
+			p.queue <- j
+		}
+		close(p.queue)
+	}()
 
-	queue := make(chan Job, len(jobs))
-	for _, j := range jobs {
-		queue <- j
-	}
-	close(queue)
-
+	g := new(errgroup.Group)
 	for i := 0; i < p.size; i++ {
-		p.wg.Add(1)
-		go p.worker(ctx, cancel, i, queue)
+		g.Go(func() error {
+			return worker(p.queue)
+		})
 	}
-	p.wg.Wait()
-	cancel()
-
-	// Return first seen error if any.
-	return p.err
+	return g.Wait()
 }
 
-func (p *pool) worker(ctx context.Context, cancel func(), id int, queue <-chan Job) {
-	defer p.wg.Done()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case job, open := <-queue:
-			if !open {
-				return
-			}
-			err := job()
-			if err != nil {
-				p.errOnce.Do(func() {
-					p.err = err
-					cancel()
-				})
-				return
-			}
+func worker(jobs <-chan Job) error {
+	for job := range jobs {
+		if err := job(); err != nil {
+			return err
 		}
 	}
+	return nil
 }

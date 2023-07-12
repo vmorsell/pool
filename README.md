@@ -1,3 +1,3 @@
 # Concurrency pool
 
-Simple concurrency pool implementation with reusable workers.
+Simple concurrency pool implementation.
